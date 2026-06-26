@@ -8,11 +8,11 @@ See the [language reference](ref.md) for more details.
 ```py
 # Define Proc as Name `greet`
 :greet { name ;
-    "hello " name "!"
+    "Hello " name "!"
 }
 
 # Invoke Word `greet` with a string
-"quillwyrm" greet
+"Spall" greet
 
 # Define Grid literal as Name `a`
 :a [
@@ -33,7 +33,7 @@ a b + print
 Prints:
 
 ```py
-hello quillwyrm!
+Hello Spall!
 11 22 33
 44 55 66
 ```
