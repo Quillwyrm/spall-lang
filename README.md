@@ -6,6 +6,14 @@ See the [language reference](ref.md) for more details.
 ## Example
 
 ```py
+# Define Proc as Name `greet`
+:greet { name ;
+    "hello " name "!"
+}
+
+# Invoke Word `greet` with a name
+"quillwyrm" greet
+
 # Define Grid literal as Name `a`
 :a [
     1 2 3;
@@ -25,6 +33,7 @@ a b + print
 Prints:
 
 ```py
+hello quillwyrm!
 [
     11 22 33;
     44 55 66
