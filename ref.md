@@ -1,4 +1,4 @@
-# Spall Reference Draft
+# Spall Reference
 
 Spall is a small PostScript-inspired stack language for generative grid, cell, and field work.
 
