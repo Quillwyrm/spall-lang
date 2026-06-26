@@ -6,16 +6,19 @@ See the [language reference](ref.md) for more details.
 ## Example
 
 ```py
+# Define Grid literal as Name `a`
 :a [
     1 2 3;
     4 5 6
 ] def
 
+# Define Grid literal as Name `b`
 :b [
     10 20 30;
     40 50 60
 ] def
 
+# Print a + b
 a b + print
 ```
 
