@@ -32,7 +32,7 @@ a b + print
 
 Prints:
 
-```py
+```
 Hello Spall!
 11 22 33
 44 55 66
