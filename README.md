@@ -11,7 +11,7 @@ See the [language reference](ref.md) for more details.
     "hello " name "!"
 }
 
-# Invoke Word `greet` with a name
+# Invoke Word `greet` with a string
 "quillwyrm" greet
 
 # Define Grid literal as Name `a`
@@ -34,8 +34,6 @@ Prints:
 
 ```py
 hello quillwyrm!
-[
-    11 22 33;
-    44 55 66
-]
+11 22 33
+44 55 66
 ```
