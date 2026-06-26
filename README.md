@@ -8,7 +8,7 @@ See the [language reference](ref.md) for more details.
 ```py
 # Define Proc as Name `greet`
 :greet { name ;
-    "Hello " name "!"
+    "Hello " . name . "!" print
 }
 
 # Invoke Word `greet` with a string
