@@ -14,13 +14,13 @@ See the [language reference](ref.md) for more details.
 # Invoke Word `greet` with a string
 "Spall" greet
 
-# Define Grid literal as Name `a`
+# Define Grid as Name `a`
 :a [
     1 2 3;
     4 5 6
 ] def
 
-# Define Grid literal as Name `b`
+# Define Grid as Name `b`
 :b [
     10 20 30;
     40 50 60
