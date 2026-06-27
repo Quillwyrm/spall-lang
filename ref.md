@@ -436,8 +436,8 @@ String `count` returns the number of characters.
 Postfix indexing reads from vecs, grids, strings, and lists.
 
 ```py
-vec[i]
-grid[x, y]
+vector[i]
+grid[x y]
 string[i]
 list[i]
 ```
