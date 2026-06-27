@@ -1,6 +1,6 @@
-# Spall Reference
+# Veld Reference
 
-Spall is a small PostScript-inspired stack language for generative grid, cell, and field work.
+Veld is a small PostScript-inspired stack language for generative grid, cell, and field work.
 
 Its core idea is:
 
@@ -12,7 +12,7 @@ stack execution
 + small persistent definitions
 ```
 
-A Spall program is a sequence of values and words. Values are pushed onto the stack. Words consume stack values and may push results.
+A Veld program is a sequence of values and words. Values are pushed onto the stack. Words consume stack values and may push results.
 
 ```py
 1 2 +
@@ -39,7 +39,7 @@ The usual style is one space after `#`.
 
 ## 2. Tokens and words
 
-Spall is whitespace-tokenized.
+Veld is whitespace-tokenized.
 
 ```py
 x y +
@@ -87,7 +87,7 @@ grid
 list
 ```
 
-There is no `nil` / `null` in core Spall.
+There is no `nil` / `null` in core Veld.
 
 Missing names, stack underflow, wrong types, out-of-bounds indexing, bad grid shapes, and similar invalid operations are hard execution errors.
 
@@ -112,7 +112,7 @@ Float literals:
 -0.25
 ```
 
-Spall has separate `int` and `float` numeric values.
+Veld has separate `int` and `float` numeric values.
 
 Arithmetic words work on numbers. Mixed numeric operations may promote to float when needed.
 
@@ -143,7 +143,7 @@ Comparisons return booleans.
 3 4 <     # true
 ```
 
-Control flow requires booleans. Spall does not use general truthiness.
+Control flow requires booleans. Veld does not use general truthiness.
 
 ```py
 true { "yes" print } if
@@ -368,7 +368,7 @@ Semicolon-separated rows create a `grid`.
 
 All grid rows must have the same width.
 
-Spall’s core grid lane is homogeneous. Numeric vecs/grids are the main required form.
+Veld’s core grid lane is homogeneous. Numeric vecs/grids are the main required form.
 
 ```py
 :vec [ 69 420 1337 ] def
@@ -411,19 +411,27 @@ Lists may contain mixed value kinds.
 
 ## 12. Strings
 
-Core strings are ASCII strings.
+Core strings are byte strings. A string literal stores the exact source bytes between its quotes.
 
 ```py
 "hello"
 ```
 
-String indexing returns a one-character string.
+There are no escapes or Unicode character semantics yet. A carriage return or newline before the
+closing quote is an error. After the closing quote, the next byte must be whitespace or EOF.
+
+```py
+"hello" print  # valid
+"hello"print   # error
+```
+
+String indexing returns a one-byte string.
 
 ```py
 "hello"[1]  # "e"
 ```
 
-String `count` returns the number of characters.
+String `count` returns the number of bytes.
 
 ```py
 "hello" count  # 5
@@ -456,7 +464,7 @@ grid[1, 0]       # 2
 "hello"[1]       # "e"
 ```
 
-Indexing is read-only in core Spall.
+Indexing is read-only in core Veld.
 
 Out-of-bounds indexing is an error.
 
@@ -622,7 +630,7 @@ Runs the proc repeatedly until `exit`.
 
 ## 17. Errors
 
-Spall uses simple hard execution errors.
+Veld uses simple hard execution errors.
 
 Examples:
 
@@ -638,7 +646,7 @@ invalid control condition
 
 There is no core language-level recovery system.
 
-A host REPL may catch an error, report it, and accept more input, but that is outside core Spall semantics.
+A host REPL may catch an error, report it, and accept more input, but that is outside core Veld semantics.
 
 ---
 

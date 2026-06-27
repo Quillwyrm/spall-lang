@@ -1,4 +1,4 @@
-package spall
+package veld
 
 import "core:strconv"
 import "core:fmt"
@@ -13,9 +13,9 @@ TokenKind :: enum {
 	WORD,
 	INT,
 	FLOAT,
+	STRING,
 
 	// Later:
-	// STRING,
 	// NAME, // :foo
 	//
 	// TRUE,
@@ -79,11 +79,15 @@ is_digit :: proc(ch: u8) -> bool {
 	return ch >= '0' && ch <= '9'
 }
 
+is_whitespace :: proc(ch: u8) -> bool {
+	return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
+}
+
 
 // Token scans ====================================================================================
 
-// lex_number consumes a Spall numeric literal and cooks it to INT or FLOAT.
-// Negative numeric spellings are literals in Spall; "-" alone is a WORD.
+// lex_number consumes a Veld numeric literal and cooks it to INT or FLOAT.
+// Negative numeric spellings are literals in Veld; "-" alone is a WORD.
 lex_number :: proc() -> Token {
 	if Lexer.source[Lexer.index] == '-' {
 		Lexer.index += 1
@@ -113,7 +117,7 @@ lex_number :: proc() -> Token {
 	// non-whitespace text, surface it as a malformed number instead of splitting it.
 	if Lexer.index < len(Lexer.source) {
 		ch := Lexer.source[Lexer.index]
-		if ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n' {
+		if !is_whitespace(ch) {
 			return lexer_error("invalid number literal")
 		}
 	}
@@ -137,10 +141,38 @@ lex_number :: proc() -> Token {
 	return make_token(.INT, TokenValue(value))
 }
 
+lex_string :: proc() -> Token {
+	Lexer.index += 1
+	text_start := Lexer.index
+
+	for Lexer.index < len(Lexer.source) {
+		ch := Lexer.source[Lexer.index]
+
+		if ch == '"' {
+			token_text := Lexer.source[text_start:Lexer.index]
+			Lexer.index += 1
+
+			if Lexer.index < len(Lexer.source) && !is_whitespace(Lexer.source[Lexer.index]) {
+				return lexer_error("expected whitespace after string literal")
+			}
+
+			return make_token(.STRING, TokenValue(token_text))
+		}
+
+		if ch == '\r' || ch == '\n' {
+			return lexer_error("newline in string literal")
+		}
+
+		Lexer.index += 1
+	}
+
+	return lexer_error("unterminated string literal")
+}
+
 lex_word :: proc() -> Token {
 	for Lexer.index < len(Lexer.source) {
 		ch := Lexer.source[Lexer.index]
-		if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
+		if is_whitespace(ch) {
 			break
 		}
 		Lexer.index += 1
@@ -162,7 +194,7 @@ begin_lex :: proc(source: string) {
 lex_next_token :: proc() -> Token {
 	for Lexer.index < len(Lexer.source) {
 		ch := Lexer.source[Lexer.index]
-		if ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n' {
+		if !is_whitespace(ch) {
 			break
 		}
 		Lexer.index += 1
@@ -193,6 +225,10 @@ lex_next_token :: proc() -> Token {
 	   Lexer.source[Lexer.index + 1] == '.' &&
 	   is_digit(Lexer.source[Lexer.index + 2]) {
 		return lex_number()
+	}
+
+	if ch == '"' {
+		return lex_string()
 	}
 
 	return lex_word()
@@ -228,6 +264,10 @@ debug_print_tokens :: proc(source: string) {
 		case .FLOAT:
 			value := token.value.(f64)
 			fmt.printf("%-6s %g\n", "FLOAT", value)
+
+		case .STRING:
+			text := token.value.(string)
+			fmt.printf("%-6s \"%s\"\n", "STRING", text)
 		}
 	}
 }

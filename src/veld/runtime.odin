@@ -1,4 +1,4 @@
-package spall
+package veld
 
 import "core:fmt"
 import "core:os"

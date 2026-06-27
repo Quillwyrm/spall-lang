@@ -18,11 +18,11 @@
 grid square print 
 ```
 
-Yeah. My inferred Spall shape is:
+Yeah. My inferred Veld shape is:
 
-## Spall
+## Veld
 
-Spall is a tiny **PostScript-inspired stack language** for generative/cellular/grid work.
+Veld is a tiny **PostScript-inspired stack language** for generative/cellular/grid work.
 
 The core idea is:
 
@@ -42,7 +42,7 @@ So it is not “a normal language with weird syntax.” It is more like a little
 
 Everything executes left to right, pushing values and running words.
 
-```spall
+```veld
 1 2 +
 ```
 
@@ -50,7 +50,7 @@ pushes `1`, pushes `2`, runs `+`, leaves `3`.
 
 Words consume stack values and leave stack values.
 
-```spall
+```veld
 256 256 grid noise blur norm draw
 ```
 
@@ -70,19 +70,19 @@ draw it
 
 Literal names use `:`.
 
-```spall
+```veld
 :x
 ```
 
 Bare names look up values.
 
-```spall
+```veld
 x
 ```
 
 Definitions use PostScript-ish `def`.
 
-```spall
+```veld
 :x 10 def
 ```
 
@@ -90,7 +90,7 @@ means bind `x` to `10`.
 
 Procedures are values too:
 
-```spall
+```veld
 :square { x ;
     x x *
 } def
@@ -121,13 +121,13 @@ Each delimiter has a separate job.
 
 Raw stack proc:
 
-```spall
+```veld
 { dup * }
 ```
 
 Named-input proc:
 
-```spall
+```veld
 { x ;
     x x *
 }
@@ -135,7 +135,7 @@ Named-input proc:
 
 Multi-input proc:
 
-```spall
+```veld
 { x y ;
     x x * y y * + sqrt
 }
@@ -143,7 +143,7 @@ Multi-input proc:
 
 When the proc runs, inputs are popped from the stack into local names.
 
-```spall
+```veld
 3 4 { x y ;
     x x * y y * + sqrt
 } do
@@ -161,13 +161,13 @@ This gives you PostScript-style proc values, but avoids forcing every readable p
 
 One row makes a `vec`:
 
-```spall
+```veld
 [ 1 2 3 ]
 ```
 
 Multiple rows separated by `;` make a `grid`:
 
-```spall
+```veld
 [
     1 2 3;
     4 5 6;
@@ -179,13 +179,13 @@ This is not a vec-of-vecs. It is a dense homogeneous rank-2 grid.
 
 Because the collector executes, dynamic elements work naturally:
 
-```spall
+```veld
 [ 1 2 + 4 5 * ]
 ```
 
 produces:
 
-```spall
+```veld
 [ 3 20 ]
 ```
 
@@ -197,7 +197,7 @@ That is one of the strongest parts of the design.
 
 `( ... )` is the general heterogeneous list collector.
 
-```spall
+```veld
 :scene (
     ( "circle" [ 120 80 ] 40 red )
     ( "line" [ 0 0 ] [ 240 160 ] white )
@@ -247,7 +247,7 @@ string  scalar text value, indexable
 
 String indexing can return a one-character string if you do not want a separate `char` type.
 
-```spall
+```veld
 "hello"[1]    # "e"
 ```
 
@@ -267,7 +267,7 @@ grid masks need where/any/all.
 
 So:
 
-```spall
+```veld
 3 4 >
 ```
 
@@ -275,7 +275,7 @@ returns `false`.
 
 But:
 
-```spall
+```veld
 field 0.5 >
 ```
 
@@ -283,7 +283,7 @@ returns a grid mask.
 
 Then:
 
-```spall
+```veld
 field 0.5 > white black where
 ```
 
@@ -291,7 +291,7 @@ selects cell-wise.
 
 But this should be invalid:
 
-```spall
+```veld
 field 0.5 > { ... } if
 ```
 
@@ -299,7 +299,7 @@ because that is a whole grid mask, not one scalar decision.
 
 Use:
 
-```spall
+```veld
 field 0.5 > any { "some bright cells" print } if
 ```
 
@@ -309,9 +309,9 @@ for scalar control.
 
 ## Indexing
 
-Even though Spall is stack-based, postfix indexing can exist.
+Even though Veld is stack-based, postfix indexing can exist.
 
-```spall
+```veld
 v[i]
 g[x, y]
 s[i]
@@ -321,7 +321,7 @@ These simply push the indexed value onto the stack.
 
 Equivalent idea:
 
-```spall
+```veld
 v i at
 g x y at
 ```
@@ -380,7 +380,7 @@ drop
 swap
 ```
 
-`over` is handy, but not central to Spall’s identity.
+`over` is handy, but not central to Veld’s identity.
 
 ---
 
@@ -390,25 +390,25 @@ This is the main power.
 
 Scalar:
 
-```spall
+```veld
 1 2 +
 ```
 
 Vec:
 
-```spall
+```veld
 [ 1 2 3 ] [ 10 20 30 ] +
 ```
 
 produces:
 
-```spall
+```veld
 [ 11 22 33 ]
 ```
 
 Grid:
 
-```spall
+```veld
 [
     1 2;
     3 4
@@ -418,7 +418,7 @@ Grid:
 
 produces:
 
-```spall
+```veld
 [
     10 20;
     30 40
@@ -437,13 +437,13 @@ Earlier `xgrid`/`ygrid` was better understood as `xcoords`/`ycoords`.
 
 For a 4×3 shape:
 
-```spall
+```veld
 4 3 xcoords
 ```
 
 would produce:
 
-```spall
+```veld
 [
     0 1 2 3;
     0 1 2 3;
@@ -453,13 +453,13 @@ would produce:
 
 and:
 
-```spall
+```veld
 4 3 ycoords
 ```
 
 would produce:
 
-```spall
+```veld
 [
     0 0 0 0;
     1 1 1 1;
@@ -471,7 +471,7 @@ This lets users generate patterns from cell position.
 
 Maybe better as one word:
 
-```spall
+```veld
 256 256 coords
 ```
 
@@ -483,7 +483,7 @@ xcoords ycoords
 
 Then:
 
-```spall
+```veld
 256 256 coords + norm draw
 ```
 
@@ -493,7 +493,7 @@ makes a diagonal gradient.
 
 ## Example: simple generative field
 
-```spall
+```veld
 :waves { w h ;
     w h xcoords 8 / sin
     w h ycoords 8 / cos
@@ -510,7 +510,7 @@ This is the pitch: no explicit loops, but it fills a whole image/grid.
 
 ## Example: kernel/grid literal
 
-```spall
+```veld
 :cross [
     0 1 0;
     1 1 1;
@@ -526,7 +526,7 @@ This is where grid literals earn their keep.
 
 ## Example: Game of Life shape
 
-```spall
+```veld
 :world 256 256 0.25 random-grid def
 
 :life-step { live ;
@@ -557,7 +557,7 @@ Because comparisons and boolean ops lift over grids/masks, the Life rule is writ
 
 ---
 
-## What Spall is good for
+## What Veld is good for
 
 The use case is not “because stack languages are cool.”
 
@@ -583,9 +583,9 @@ for y:
         img[x,y] = sin(x * 0.08) + cos(y * 0.08)
 ```
 
-Spall can say:
+Veld can say:
 
-```spall
+```veld
 256 256 xcoords 8 / sin
 256 256 ycoords 8 / cos
 +
@@ -599,7 +599,7 @@ It is esoteric, but it has a real lane.
 
 ## Current design feel
 
-Spall is:
+Veld is:
 
 ```text
 PostScript-ish names/procs/def

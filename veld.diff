@@ -1,0 +1,584 @@
+diff --git a/README.md b/README.md
+index 540d600..e2d6d32 100644
+--- a/README.md
++++ b/README.md
+@@ -3,6 +3,19 @@ Veld is a cellular stack-based language inspired by PostScript, Forth, Factor, a
+ 
+ See the [language reference](ref.md) for more details.
+ 
++## CLI
++
++`eval` and `dump` take their source as exactly one shell argument.
++
++```powershell
++.\veld.exe eval '1 2 + print'
++.\veld.exe eval '"hello veld!" print'
++.\veld.exe dump '"hello veld!" print'
++```
++
++The outer single quotes are PowerShell quoting. The inner double quotes are Veld syntax and are
++passed through to the language.
++
+ ## Example
+ 
+ ```py
+diff --git a/ref.md b/ref.md
+index 54533ca..1b5688b 100644
+--- a/ref.md
++++ b/ref.md
+@@ -411,19 +411,27 @@ Lists may contain mixed value kinds.
+ 
+ ## 12. Strings
+ 
+-Core strings are ASCII strings.
++Core strings are byte strings. A string literal stores the exact source bytes between its quotes.
+ 
+ ```py
+ "hello"
+ ```
+ 
+-String indexing returns a one-character string.
++There are no escapes or Unicode character semantics yet. A carriage return or newline before the
++closing quote is an error. After the closing quote, the next byte must be whitespace or EOF.
++
++```py
++"hello" print  # valid
++"hello"print   # error
++```
++
++String indexing returns a one-byte string.
+ 
+ ```py
+ "hello"[1]  # "e"
+ ```
+ 
+-String `count` returns the number of characters.
++String `count` returns the number of bytes.
+ 
+ ```py
+ "hello" count  # 5
+diff --git a/src/main.odin b/src/main.odin
+index 6217396..8bf58b4 100644
+--- a/src/main.odin
++++ b/src/main.odin
+@@ -14,20 +14,6 @@ print_help :: proc() {
+ 	fmt.println("  veld dump <source>")
+ }
+ 
+-join_args :: proc(args: []string, start: int) -> string {
+-	result := ""
+-
+-	for index := start; index < len(args); index += 1 {
+-		if index > start {
+-			result = fmt.tprintf("%s %s", result, args[index])
+-		} else {
+-			result = args[index]
+-		}
+-	}
+-
+-	return result
+-}
+-
+ main :: proc() {
+ 	if len(os.args) < 2 {
+ 		print_help()
+@@ -57,15 +43,13 @@ main :: proc() {
+ 	}
+ 
+ 	if command == "eval" {
+-		if len(os.args) < 3 {
++		if len(os.args) != 3 {
+ 			fmt.eprintln("usage: veld eval <source>")
+ 			os.exit(1)
+ 		}
+ 
+-		source := join_args(os.args, 2)
+-
+ 		vm: veld.VM
+-		if !veld.run_string(&vm, source) {
++		if !veld.run_string(&vm, os.args[2]) {
+ 			fmt.eprintln(vm.error_string)
+ 			os.exit(1)
+ 		}
+@@ -74,14 +58,12 @@ main :: proc() {
+ 	}
+ 
+ 	if command == "dump" {
+-		if len(os.args) < 3 {
++		if len(os.args) != 3 {
+ 			fmt.eprintln("usage: veld dump <source>")
+ 			os.exit(1)
+ 		}
+ 
+-		source := join_args(os.args, 2)
+-
+-		code, ok := veld.compile_source(source)
++		code, ok := veld.compile_source(os.args[2])
+ 		if !ok {
+ 			fmt.eprintln(veld.Compiler.error_string)
+ 			os.exit(1)
+diff --git a/src/veld/compiler.odin b/src/veld/compiler.odin
+index ed42362..4899f6c 100644
+--- a/src/veld/compiler.odin
++++ b/src/veld/compiler.odin
+@@ -23,7 +23,6 @@ emit_inst :: proc(op: Op, arg: u32 = 0) {
+ 	}
+ 
+ 	append(&Compiler.code.bytecode, u32(inst))
+-	append(&Compiler.code.inst_lines, 0)
+ }
+ 
+ require_stack :: proc(word: string, count: int) -> bool {
+@@ -48,6 +47,12 @@ const_float :: proc(value: f64) -> u32 {
+ 	return u32(len(Compiler.code.const_pool) - 1)
+ }
+ 
++const_string :: proc(text: string) -> u32 {
++	object := new_string_object(text)
++	append(&Compiler.code.const_pool, Value(&object.header))
++	return u32(len(Compiler.code.const_pool) - 1)
++}
++
+ 
+ // Source compilation =============================================================================
+ 
+@@ -55,7 +60,6 @@ compile_source :: proc(source: string) -> (Code, bool) {
+ 	begin_lex(source)
+ 
+ 	clear(&Compiler.code.bytecode)
+-	clear(&Compiler.code.inst_lines)
+ 	clear(&Compiler.code.const_pool)
+ 	Compiler.error_string = ""
+ 	Compiler.stack_depth = 0
+@@ -83,6 +87,12 @@ compile_source :: proc(source: string) -> (Code, bool) {
+ 			emit_inst(.PUSH_CONST, const_index)
+ 			Compiler.stack_depth += 1
+ 
++		case .STRING:
++			text := token.value.(string)
++			const_index := const_string(text)
++			emit_inst(.PUSH_CONST, const_index)
++			Compiler.stack_depth += 1
++
+ 		case .WORD:
+ 			word := token.value.(string)
+ 
+@@ -226,6 +236,16 @@ debug_print_code :: proc(code: ^Code) {
+ 
+ 		case f64:
+ 			fmt.printf("  %04d %-6s %g\n", index, "FLOAT", v)
++
++		case ^ObjectHeader:
++			switch v.tag {
++			case .STRING:
++				object := cast(^StringObject)v
++				fmt.printf("  %04d %-6s \"%s\"\n", index, "STRING", object.text)
++
++			case:
++				assert(false, "invalid object tag")
++			}
+ 		}
+ 	}
+ 
+diff --git a/src/veld/lex.odin b/src/veld/lex.odin
+index 93bb3f8..a2f81ed 100644
+--- a/src/veld/lex.odin
++++ b/src/veld/lex.odin
+@@ -13,9 +13,9 @@ TokenKind :: enum {
+ 	WORD,
+ 	INT,
+ 	FLOAT,
++	STRING,
+ 
+ 	// Later:
+-	// STRING,
+ 	// NAME, // :foo
+ 	//
+ 	// TRUE,
+@@ -79,11 +79,15 @@ is_digit :: proc(ch: u8) -> bool {
+ 	return ch >= '0' && ch <= '9'
+ }
+ 
++is_whitespace :: proc(ch: u8) -> bool {
++	return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
++}
++
+ 
+ // Token scans ====================================================================================
+ 
+-// lex_number consumes a Spall numeric literal and cooks it to INT or FLOAT.
+-// Negative numeric spellings are literals in Spall; "-" alone is a WORD.
++// lex_number consumes a Veld numeric literal and cooks it to INT or FLOAT.
++// Negative numeric spellings are literals in Veld; "-" alone is a WORD.
+ lex_number :: proc() -> Token {
+ 	if Lexer.source[Lexer.index] == '-' {
+ 		Lexer.index += 1
+@@ -113,7 +117,7 @@ lex_number :: proc() -> Token {
+ 	// non-whitespace text, surface it as a malformed number instead of splitting it.
+ 	if Lexer.index < len(Lexer.source) {
+ 		ch := Lexer.source[Lexer.index]
+-		if ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n' {
++		if !is_whitespace(ch) {
+ 			return lexer_error("invalid number literal")
+ 		}
+ 	}
+@@ -137,10 +141,38 @@ lex_number :: proc() -> Token {
+ 	return make_token(.INT, TokenValue(value))
+ }
+ 
++lex_string :: proc() -> Token {
++	Lexer.index += 1
++	text_start := Lexer.index
++
++	for Lexer.index < len(Lexer.source) {
++		ch := Lexer.source[Lexer.index]
++
++		if ch == '"' {
++			token_text := Lexer.source[text_start:Lexer.index]
++			Lexer.index += 1
++
++			if Lexer.index < len(Lexer.source) && !is_whitespace(Lexer.source[Lexer.index]) {
++				return lexer_error("expected whitespace after string literal")
++			}
++
++			return make_token(.STRING, TokenValue(token_text))
++		}
++
++		if ch == '\r' || ch == '\n' {
++			return lexer_error("newline in string literal")
++		}
++
++		Lexer.index += 1
++	}
++
++	return lexer_error("unterminated string literal")
++}
++
+ lex_word :: proc() -> Token {
+ 	for Lexer.index < len(Lexer.source) {
+ 		ch := Lexer.source[Lexer.index]
+-		if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
++		if is_whitespace(ch) {
+ 			break
+ 		}
+ 		Lexer.index += 1
+@@ -162,7 +194,7 @@ begin_lex :: proc(source: string) {
+ lex_next_token :: proc() -> Token {
+ 	for Lexer.index < len(Lexer.source) {
+ 		ch := Lexer.source[Lexer.index]
+-		if ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n' {
++		if !is_whitespace(ch) {
+ 			break
+ 		}
+ 		Lexer.index += 1
+@@ -195,6 +227,10 @@ lex_next_token :: proc() -> Token {
+ 		return lex_number()
+ 	}
+ 
++	if ch == '"' {
++		return lex_string()
++	}
++
+ 	return lex_word()
+ }
+ 
+@@ -228,6 +264,10 @@ debug_print_tokens :: proc(source: string) {
+ 		case .FLOAT:
+ 			value := token.value.(f64)
+ 			fmt.printf("%-6s %g\n", "FLOAT", value)
++
++		case .STRING:
++			text := token.value.(string)
++			fmt.printf("%-6s \"%s\"\n", "STRING", text)
+ 		}
+ 	}
+ }
+diff --git a/src/veld/vm.odin b/src/veld/vm.odin
+index 815b447..db1ca7a 100644
+--- a/src/veld/vm.odin
++++ b/src/veld/vm.odin
+@@ -36,18 +36,12 @@ Inst :: bit_field u32 {
+ 	arg: u32 | 24,
+ }
+ 
+-decode_op :: #force_inline proc(word: u32) -> Op {
+-	return Op(u8(word & 0xff))
+-}
+-
+ 
+ // Code ===========================================================================================
+ 
+-// Code is one executable stack bytecode stream.
+-// bytecode[i] came from source line inst_lines[i].
++// Code aliases Compiler scratch storage and is valid only until the next compile_source call.
+ Code :: struct {
+ 	bytecode:   [dynamic]u32,
+-	inst_lines: [dynamic]int,
+ 	const_pool: [dynamic]Value,
+ }
+ 
+@@ -86,18 +80,21 @@ VM :: struct {
+ 	error_string: string,
+ }
+ 
++// Execution is single-active and non-reentrant.
++Active_VM: ^VM
++
+ 
+ // Stack operations ===============================================================================
+ 
+-push_value :: proc(vm: ^VM, value: Value) {
+-	append(&vm.stack, value)
++push_value :: proc(value: Value) {
++	append(&Active_VM.stack, value)
+ }
+ 
+-pop_value :: proc(vm: ^VM) -> Value {
+-	assert(len(vm.stack) > 0, "VM stack underflow")
++pop_value :: proc() -> Value {
++	assert(len(Active_VM.stack) > 0, "VM stack underflow")
+ 
+-	value := vm.stack[len(vm.stack) - 1]
+-	pop(&vm.stack)
++	value := Active_VM.stack[len(Active_VM.stack) - 1]
++	pop(&Active_VM.stack)
+ 	return value
+ }
+ 
+@@ -121,6 +118,9 @@ write_value :: proc(value: Value) {
+ 		case .STRING:
+ 			object := cast(^StringObject)v
+ 			fmt.print(object.text)
++
++		case:
++			assert(false, "invalid object tag")
+ 		}
+ 	}
+ }
+@@ -128,111 +128,123 @@ write_value :: proc(value: Value) {
+ 
+ // Execution ======================================================================================
+ 
+-runtime_error :: proc(vm: ^VM, message: string) -> bool {
+-	vm.error_string = message
+-	return false
++runtime_error :: proc(message: string) {
++	Active_VM.error_string = message
+ }
+ 
+-run_number_op :: proc(vm: ^VM, op: Op) {
+-	rhs := pop_value(vm)
+-	lhs := pop_value(vm)
++run_number_op :: proc(op: Op) {
++	rhs := pop_value()
++	lhs := pop_value()
+ 
+ 	switch l in lhs {
+ 	case i64:
+ 		switch r in rhs {
+ 		case i64:
+ 			if op == .ADD {
+-				push_value(vm, Value(l + r))
++				push_value(Value(l + r))
+ 				return
+ 			}
+ 
+ 			if op == .SUB {
+-				push_value(vm, Value(l - r))
++				push_value(Value(l - r))
+ 				return
+ 			}
+ 
+ 			if op == .MUL {
+-				push_value(vm, Value(l * r))
++				push_value(Value(l * r))
+ 				return
+ 			}
+ 
+ 			if op == .DIV {
+-				push_value(vm, Value(f64(l) / f64(r)))
++				push_value(Value(f64(l) / f64(r)))
+ 				return
+ 			}
+ 
+ 		case f64:
+ 			if op == .ADD {
+-				push_value(vm, Value(f64(l) + r))
++				push_value(Value(f64(l) + r))
+ 				return
+ 			}
+ 
+ 			if op == .SUB {
+-				push_value(vm, Value(f64(l) - r))
++				push_value(Value(f64(l) - r))
+ 				return
+ 			}
+ 
+ 			if op == .MUL {
+-				push_value(vm, Value(f64(l) * r))
++				push_value(Value(f64(l) * r))
+ 				return
+ 			}
+ 
+ 			if op == .DIV {
+-				push_value(vm, Value(f64(l) / r))
++				push_value(Value(f64(l) / r))
+ 				return
+ 			}
++
++		case ^ObjectHeader:
++			runtime_error("numeric operator expected numbers")
++			return
+ 		}
+ 
+ 	case f64:
+ 		switch r in rhs {
+ 		case i64:
+ 			if op == .ADD {
+-				push_value(vm, Value(l + f64(r)))
++				push_value(Value(l + f64(r)))
+ 				return
+ 			}
+ 
+ 			if op == .SUB {
+-				push_value(vm, Value(l - f64(r)))
++				push_value(Value(l - f64(r)))
+ 				return
+ 			}
+ 
+ 			if op == .MUL {
+-				push_value(vm, Value(l * f64(r)))
++				push_value(Value(l * f64(r)))
+ 				return
+ 			}
+ 
+ 			if op == .DIV {
+-				push_value(vm, Value(l / f64(r)))
++				push_value(Value(l / f64(r)))
+ 				return
+ 			}
+ 
+ 		case f64:
+ 			if op == .ADD {
+-				push_value(vm, Value(l + r))
++				push_value(Value(l + r))
+ 				return
+ 			}
+ 
+ 			if op == .SUB {
+-				push_value(vm, Value(l - r))
++				push_value(Value(l - r))
+ 				return
+ 			}
+ 
+ 			if op == .MUL {
+-				push_value(vm, Value(l * r))
++				push_value(Value(l * r))
+ 				return
+ 			}
+ 
+ 			if op == .DIV {
+-				push_value(vm, Value(l / r))
++				push_value(Value(l / r))
+ 				return
+ 			}
++
++		case ^ObjectHeader:
++			runtime_error("numeric operator expected numbers")
++			return
+ 		}
++
++	case ^ObjectHeader:
++		runtime_error("numeric operator expected numbers")
++		return
+ 	}
+ 
+-	assert(false, "invalid numeric opcode")
++	runtime_error("numeric operator expected numbers")
+ }
+ 
+ run_code :: proc(vm: ^VM, code: ^Code) -> bool {
++	Active_VM = vm
+ 	vm.error_string = ""
+ 
+ 	for ip := 0; ip < len(code.bytecode); ip += 1 {
+@@ -241,54 +253,61 @@ run_code :: proc(vm: ^VM, code: ^Code) -> bool {
+ 		switch inst.op {
+ 		case .PUSH_CONST:
+ 			const_index := int(inst.arg)
+-			assert(const_index >= 0 && const_index < len(code.const_pool), "PUSH_CONST constant index out of range")
++			assert(const_index < len(code.const_pool), "PUSH_CONST constant index out of range")
+ 
+-			push_value(vm, code.const_pool[const_index])
++			push_value(code.const_pool[const_index])
+ 
+ 		case .ADD:
+-			run_number_op(vm, .ADD)
++			run_number_op(.ADD)
++			if Active_VM.error_string != "" do return false
+ 
+ 		case .SUB:
+-			run_number_op(vm, .SUB)
++			run_number_op(.SUB)
++			if Active_VM.error_string != "" do return false
+ 
+ 		case .MUL:
+-			run_number_op(vm, .MUL)
++			run_number_op(.MUL)
++			if Active_VM.error_string != "" do return false
+ 
+ 		case .DIV:
+-			run_number_op(vm, .DIV)
++			run_number_op(.DIV)
++			if Active_VM.error_string != "" do return false
+ 
+ 		case .DUP:
+-			assert(len(vm.stack) >= 1, "DUP stack underflow")
++			assert(len(Active_VM.stack) >= 1, "DUP stack underflow")
+ 
+-			value := vm.stack[len(vm.stack) - 1]
+-			push_value(vm, value)
++			value := Active_VM.stack[len(Active_VM.stack) - 1]
++			push_value(value)
+ 
+ 		case .DROP:
+-			pop_value(vm)
++			pop_value()
+ 
+ 		case .SWAP:
+-			assert(len(vm.stack) >= 2, "SWAP stack underflow")
++			assert(len(Active_VM.stack) >= 2, "SWAP stack underflow")
+ 
+-			top := len(vm.stack) - 1
+-			vm.stack[top], vm.stack[top - 1] = vm.stack[top - 1], vm.stack[top]
++			top := len(Active_VM.stack) - 1
++			Active_VM.stack[top], Active_VM.stack[top - 1] = Active_VM.stack[top - 1], Active_VM.stack[top]
+ 
+ 		case .OVER:
+-			assert(len(vm.stack) >= 2, "OVER stack underflow")
++			assert(len(Active_VM.stack) >= 2, "OVER stack underflow")
+ 
+-			value := vm.stack[len(vm.stack) - 2]
+-			push_value(vm, value)
++			value := Active_VM.stack[len(Active_VM.stack) - 2]
++			push_value(value)
+ 
+ 		case .WRITE:
+-			value := pop_value(vm)
++			value := pop_value()
+ 			write_value(value)
+ 
+ 		case .PRINT:
+-			value := pop_value(vm)
++			value := pop_value()
+ 			write_value(value)
+ 			fmt.println()
+ 
+ 		case .NEWLINE:
+ 			fmt.println()
++
++		case:
++			assert(false, "invalid opcode")
+ 		}
+ 	}
+ 

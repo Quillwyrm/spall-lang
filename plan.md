@@ -205,10 +205,10 @@ run_code :: proc(vm: ^VM, code: ^Code) -> bool {
 
 This is the VM execution core. It does not clear the stack at run start, only `error_string`, which is better for later REPL behavior.
 
-## 3. Add `src/spall/runtime.odin`
+## 3. Add `src/veld/runtime.odin`
 
 ```odin
-package spall
+package veld
 
 import "core:fmt"
 import "core:os"
@@ -239,8 +239,8 @@ run_file :: proc(vm: ^VM, path: string) -> bool {
 This gives you the host-facing core:
 
 ```odin
-spall.run_string(&vm, source)
-spall.run_file(&vm, path)
+veld.run_string(&vm, source)
+veld.run_file(&vm, path)
 ```
 
 ## 4. Replace `main.odin`
@@ -251,15 +251,15 @@ package main
 import "core:fmt"
 import "core:os"
 import "core:strings"
-import "spall"
+import "veld"
 
 print_help :: proc() {
-	fmt.println("spall")
+	fmt.println("veld")
 	fmt.println("")
 	fmt.println("Usage:")
-	fmt.println("  spall run <file>")
-	fmt.println("  spall eval <source>")
-	fmt.println("  spall dump <source>")
+	fmt.println("  veld run <file>")
+	fmt.println("  veld eval <source>")
+	fmt.println("  veld dump <source>")
 }
 
 join_args :: proc(args: []string, start: int) -> string {
@@ -291,12 +291,12 @@ main :: proc() {
 
 	if command == "run" {
 		if len(os.args) != 3 {
-			fmt.eprintln("usage: spall run <file>")
+			fmt.eprintln("usage: veld run <file>")
 			os.exit(1)
 		}
 
-		vm: spall.VM
-		if !spall.run_file(&vm, os.args[2]) {
+		vm: veld.VM
+		if !veld.run_file(&vm, os.args[2]) {
 			fmt.eprintln(vm.error_string)
 			os.exit(1)
 		}
@@ -306,14 +306,14 @@ main :: proc() {
 
 	if command == "eval" {
 		if len(os.args) < 3 {
-			fmt.eprintln("usage: spall eval <source>")
+			fmt.eprintln("usage: veld eval <source>")
 			os.exit(1)
 		}
 
 		source := join_args(os.args, 2)
 
-		vm: spall.VM
-		if !spall.run_string(&vm, source) {
+		vm: veld.VM
+		if !veld.run_string(&vm, source) {
 			fmt.eprintln(vm.error_string)
 			os.exit(1)
 		}
@@ -323,25 +323,25 @@ main :: proc() {
 
 	if command == "dump" {
 		if len(os.args) < 3 {
-			fmt.eprintln("usage: spall dump <source>")
+			fmt.eprintln("usage: veld dump <source>")
 			os.exit(1)
 		}
 
 		source := join_args(os.args, 2)
 
-		code, ok := spall.compile_source(source)
+		code, ok := veld.compile_source(source)
 		if !ok {
-			fmt.eprintln(spall.Compiler.error_string)
+			fmt.eprintln(veld.Compiler.error_string)
 			os.exit(1)
 		}
 
-		spall.debug_print_code(&code)
+		veld.debug_print_code(&code)
 		return
 	}
 
-	if strings.has_suffix(command, ".spall") {
-		vm: spall.VM
-		if !spall.run_file(&vm, command) {
+	if strings.has_suffix(command, ".veld") {
+		vm: veld.VM
+		if !veld.run_file(&vm, command) {
 			fmt.eprintln(vm.error_string)
 			os.exit(1)
 		}
@@ -358,16 +358,16 @@ main :: proc() {
 Then you should be able to do:
 
 ```powershell
-.\spall.exe eval 1 2 + print
-.\spall.exe eval "10 3 mod print"
-.\spall.exe dump "1 2 + print"
-.\spall.exe run test.spall
+.\veld.exe eval 1 2 + print
+.\veld.exe eval "10 3 mod print"
+.\veld.exe dump "1 2 + print"
+.\veld.exe run test.veld
 ```
 
 One note: this is intentionally not a REPL yet. It just sets up the right boundary so REPL later is trivial:
 
 ```odin
-vm: spall.VM
+vm: veld.VM
 for each input line:
-	spall.run_string(&vm, line)
+	veld.run_string(&vm, line)
 ```

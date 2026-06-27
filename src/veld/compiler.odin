@@ -1,4 +1,4 @@
-package spall
+package veld
 
 import "core:fmt"
 
@@ -23,7 +23,6 @@ emit_inst :: proc(op: Op, arg: u32 = 0) {
 	}
 
 	append(&Compiler.code.bytecode, u32(inst))
-	append(&Compiler.code.inst_lines, 0)
 }
 
 require_stack :: proc(word: string, count: int) -> bool {
@@ -48,6 +47,12 @@ const_float :: proc(value: f64) -> u32 {
 	return u32(len(Compiler.code.const_pool) - 1)
 }
 
+const_string :: proc(text: string) -> u32 {
+	object := new_string_object(text)
+	append(&Compiler.code.const_pool, Value(&object.header))
+	return u32(len(Compiler.code.const_pool) - 1)
+}
+
 
 // Source compilation =============================================================================
 
@@ -55,7 +60,6 @@ compile_source :: proc(source: string) -> (Code, bool) {
 	begin_lex(source)
 
 	clear(&Compiler.code.bytecode)
-	clear(&Compiler.code.inst_lines)
 	clear(&Compiler.code.const_pool)
 	Compiler.error_string = ""
 	Compiler.stack_depth = 0
@@ -80,6 +84,12 @@ compile_source :: proc(source: string) -> (Code, bool) {
 		case .FLOAT:
 			value := token.value.(f64)
 			const_index := const_float(value)
+			emit_inst(.PUSH_CONST, const_index)
+			Compiler.stack_depth += 1
+
+		case .STRING:
+			text := token.value.(string)
+			const_index := const_string(text)
 			emit_inst(.PUSH_CONST, const_index)
 			Compiler.stack_depth += 1
 
@@ -150,7 +160,7 @@ compile_source :: proc(source: string) -> (Code, bool) {
 				emit_inst(.OVER)
 				Compiler.stack_depth += 1
 
-			case ".":
+			case "write":
 				if !require_stack(word, 1) {
 					return {}, false
 				}
@@ -165,6 +175,9 @@ compile_source :: proc(source: string) -> (Code, bool) {
 
 				emit_inst(.PRINT)
 				Compiler.stack_depth -= 1
+
+			case "nl":
+				emit_inst(.NEWLINE)
 
 			case:
 				Compiler.error_string = fmt.tprintf("unknown word: %s", word)
@@ -204,6 +217,8 @@ op_to_string :: proc(op: Op) -> string {
 		return "WRITE"
 	case .PRINT:
 		return "PRINT"
+	case .NEWLINE:
+		return "NL"
 	}
 
 	return "UNKNOWN"
@@ -221,6 +236,16 @@ debug_print_code :: proc(code: ^Code) {
 
 		case f64:
 			fmt.printf("  %04d %-6s %g\n", index, "FLOAT", v)
+
+		case ^ObjectHeader:
+			switch v.kind {
+			case .STRING:
+				object := cast(^StringObject)v
+				fmt.printf("  %04d %-6s \"%s\"\n", index, "STRING", object.text)
+
+			case:
+				assert(false, "invalid object tag")
+			}
 		}
 	}
 
